@@ -208,10 +208,7 @@ void NewWoiceDialog::setPreviewWoice(const QString &path) {
 void NewWoiceDialog::previewWoice(const QString &path) {
   setPreviewWoice(path);
   if (m_preview_woice == nullptr) return;
-
-  bool ok;
-  int key = ui->previewKeyLine->text().toInt(&ok) * PITCH_PER_KEY;
-  if (!ok) key = EVENTDEFAULT_KEY;
+  int key = ui->previewKeySpin->value() * PITCH_PER_KEY;
 
   int vel =
       ui->previewVolSlider->value() * 128 / ui->previewVolSlider->maximum();
@@ -230,9 +227,7 @@ NewWoiceDialog::NewWoiceDialog(bool multi, const PxtoneClient *client,
       m_last_search_dir_it(nullptr),
       ui(new Ui::NewWoiceDialog) {
   ui->setupUi(this);
-  ui->previewKeyLine->setText(
-      QString("%1").arg(EVENTDEFAULT_KEY / PITCH_PER_KEY));
-  ui->previewKeyLine->setValidator(new QIntValidator(0, 150, this));
+  ui->previewKeySpin->setValue(EVENTDEFAULT_KEY / PITCH_PER_KEY);
 
   // If we don't unset the directory, then it'll stay as the cwd. But we want to
   // use cwd if this is a first open, hence the if.
@@ -334,8 +329,8 @@ void NewWoiceDialog::inputMidi(const Input::Event::Event &e) {
                  [this](const Input::Event::On &e) {
                    if (m_preview_woice == nullptr) return;
                    m_record_note_preview[e.key] = std::make_unique<NotePreview>(
-                       m_client->pxtn(), &m_client->moo()->params, e.key, e.vel,
-                       100000000, m_preview_woice,
+                       m_client->pxtn(), &m_client->moo()->params, e.key,
+                       e.vel(), 100000000, m_preview_woice,
                        m_client->audioState()->bufferSize(), this);
                  },
                  [this](const Input::Event::Off &e) {

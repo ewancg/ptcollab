@@ -42,6 +42,14 @@ void SettingsDialog::apply() {
   Settings::OctaveDisplayA::set(ui->octaveMarkerACheck->isChecked());
   Settings::PinnedUnitLabels::set(ui->pinnedUnitLabelCheck->isChecked());
   Settings::AdvancedQuantizeY::set(ui->alternateTuningCheck->isChecked());
+  Settings::RecordMidi::set(ui->recordMidiCheck->isChecked());
+  Settings::NewUnitDefaultVolume::set(ui->defaultVolumeSpin->value());
+  Settings::MeasureViewClickToJumpUnit::set(
+      ui->selectPinnedUnitOnClickCheck->isChecked());
+  Settings::StrictFollowSeek::set(ui->followSeekStrictCheck->isChecked());
+  Settings::VelocitySensitivity::set(ui->velocitySensitivityCheck->isChecked());
+  Settings::DisplayScale::set(ui->displayScaleSpin->value());
+  Settings::LeftPianoWidth::set(ui->leftPianoWidthSpin->value());
   if (ui->alternateTuningCheck->isChecked()) {
     QList<int> rowDisplayPattern;
     for (char c : ui->rowDisplayEdit->text().toStdString()) {
@@ -87,6 +95,15 @@ void SettingsDialog::showEvent(QShowEvent *) {
       ui->alternateTuningCheck->isChecked());
   ui->octaveMarkerACheck->setChecked(Settings::OctaveDisplayA::get());
   ui->pinnedUnitLabelCheck->setChecked(Settings::PinnedUnitLabels::get());
+  ui->selectPinnedUnitOnClickCheck->setChecked(
+      Settings::MeasureViewClickToJumpUnit::get());
+  ui->defaultVolumeSpin->setValue(Settings::NewUnitDefaultVolume::get());
+  ui->displayScaleSpin->setValue(Settings::DisplayScale::get());
+  ui->leftPianoWidthSpin->setValue(Settings::LeftPianoWidth::get());
+  ui->recordMidiCheck->setChecked(Settings::RecordMidi::get());
+  ui->followSeekStrictCheck->setChecked(Settings::StrictFollowSeek::get());
+  ui->velocitySensitivityCheck->setChecked(
+      Settings::VelocitySensitivity::get());
 
   QString rowDisplay = "";
   for (auto &b : Settings::DisplayEdo::get()) rowDisplay += (b ? "B" : "W");

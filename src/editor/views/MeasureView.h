@@ -17,10 +17,13 @@ class MeasureView : public QWidget {
   Scale m_last_scale;
   MooClock *m_moo_clock;
   QFont m_label_font;
+  QFontMetrics m_label_font_metrics;
   std::unique_ptr<NotePreview> m_audio_note_preview;
   std::optional<int> m_focused_unit_no;
   std::optional<int> m_hovered_unit_no;
-  bool m_select_unit_enabled;
+  std::vector<std::optional<std::pair<QString, QPixmap>>> m_pinned_unit_labels;
+  bool m_selection_mode;
+  bool m_jump_to_unit_enabled;
 
   // Tracked separately from editState since that one doesn't track leaves +
   // this one is relative to window position
@@ -46,7 +49,7 @@ class MeasureView : public QWidget {
 
  signals:
   void heightChanged(int h);
-  void hoverUnitNoChanged(std::optional<int>);
+  void hoverUnitNoChanged(std::optional<int>, bool);
 };
 
 #endif  // MEASUREVIEW_H

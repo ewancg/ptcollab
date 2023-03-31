@@ -30,7 +30,7 @@ class SideMenu : public QWidget {
                     DelayEffectModel *delays, OverdriveEffectModel *ovdrvs,
                     NewWoiceDialog *new_woice_dialog,
                     NewWoiceDialog *change_woice_dialog,
-                    VolumeMeterFrame *volume_meter_widget,
+                    VolumeMeterBars *volume_meter_widget,
                     QWidget *parent = nullptr);
   void setEditWidgetsEnabled(bool);
   void setTab(int index);
@@ -46,7 +46,7 @@ class SideMenu : public QWidget {
   void playButtonPressed();
   void stopButtonPressed();
   void saveButtonPressed();
-  void addUnit(int woice_idx, QString unit_name);
+  void addUnit(int woice_no, QString unit_name);
   void removeUnit();
   void addOverdrive();
   void removeOverdrive(int no);
@@ -57,6 +57,7 @@ class SideMenu : public QWidget {
   void selectedUnitsChanged(const QItemSelection &selected,
                             const QItemSelection &deselected);
   void hoveredUnitChanged(std::optional<int>);
+  void hoveredWoiceChanged(std::optional<int>);
   void beatsChanged(int tempo);
   void tempoChanged(int beats);
   void followPlayheadClicked(FollowPlayhead);
@@ -65,6 +66,8 @@ class SideMenu : public QWidget {
   void volumeChanged(int volume);
   void bufferLengthChanged(double secs);
   void userSelected(int user);
+  void userFollowClicked(int user);
+  void titleCommentBtnClicked();
 
  public slots:
   void setQuantXIndex(int);

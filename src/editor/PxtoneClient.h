@@ -59,6 +59,7 @@ class PxtoneClient : public QObject {
   PxtoneClient(pxtnService *pxtn, ConnectionStatusLabel *connection_status,
 
                QObject *parent = nullptr);
+  ~PxtoneClient();
   void applyAction(const std::list<Action::Primitive> &);
   void sendAction(const ClientAction &);
   void removeCurrentUnit();
@@ -70,8 +71,10 @@ class PxtoneClient : public QObject {
   void togglePlayState();
   void resetAndSuspendAudio();
   void setFollowing(std::optional<qint64> following);
+  void jumpToUser(qint64 user_id);
   bool isFollowing();
   std::set<int> selectedUnitNos();
+  std::set<int> selectedUnitIds();
   const pxtnService *pxtn() const { return m_controller->pxtn(); }
   const EditState &editState() const { return m_edit_state; }
   const mooState *moo() const { return m_controller->moo(); }

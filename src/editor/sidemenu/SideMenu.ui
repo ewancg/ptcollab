@@ -124,7 +124,7 @@
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
-        <widget class="QTableView" name="woiceList">
+        <widget class="TableView" name="woiceList">
          <property name="focusPolicy">
           <enum>Qt::NoFocus</enum>
          </property>
@@ -161,18 +161,36 @@
         <layout class="QHBoxLayout" name="horizontalLayout_7">
          <item>
           <widget class="QPushButton" name="addWoiceBtn">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="focusPolicy">
             <enum>Qt::NoFocus</enum>
            </property>
+           <property name="toolTip">
+            <string>Add voice</string>
+           </property>
            <property name="text">
-            <string>+</string>
+            <string/>
            </property>
           </widget>
          </item>
          <item>
           <widget class="QPushButton" name="changeWoiceBtn">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="focusPolicy">
             <enum>Qt::NoFocus</enum>
+           </property>
+           <property name="toolTip">
+            <string>Change voice</string>
            </property>
            <property name="text">
             <string>Change</string>
@@ -181,11 +199,20 @@
          </item>
          <item>
           <widget class="QPushButton" name="removeWoiceBtn">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="focusPolicy">
             <enum>Qt::NoFocus</enum>
            </property>
+           <property name="toolTip">
+            <string>Remove voice</string>
+           </property>
            <property name="text">
-            <string>-</string>
+            <string/>
            </property>
           </widget>
          </item>
@@ -239,6 +266,9 @@
            <property name="focusPolicy">
             <enum>Qt::NoFocus</enum>
            </property>
+           <property name="toolTip">
+            <string>Move unit up</string>
+           </property>
            <property name="text">
             <string/>
            </property>
@@ -252,6 +282,9 @@
           <widget class="QPushButton" name="downUnitBtn">
            <property name="focusPolicy">
             <enum>Qt::NoFocus</enum>
+           </property>
+           <property name="toolTip">
+            <string>Move unit down</string>
            </property>
            <property name="text">
             <string/>
@@ -271,8 +304,11 @@
            <property name="focusPolicy">
             <enum>Qt::NoFocus</enum>
            </property>
+           <property name="toolTip">
+            <string>Add unit</string>
+           </property>
            <property name="text">
-            <string>+</string>
+            <string/>
            </property>
           </widget>
          </item>
@@ -281,8 +317,11 @@
            <property name="focusPolicy">
             <enum>Qt::NoFocus</enum>
            </property>
+           <property name="toolTip">
+            <string>Remove unit</string>
+           </property>
            <property name="text">
-            <string>-</string>
+            <string/>
            </property>
           </widget>
          </item>
@@ -356,8 +395,11 @@
            <property name="focusPolicy">
             <enum>Qt::NoFocus</enum>
            </property>
+           <property name="toolTip">
+            <string>Add overdrive</string>
+           </property>
            <property name="text">
-            <string>+</string>
+            <string/>
            </property>
           </widget>
          </item>
@@ -366,8 +408,11 @@
            <property name="focusPolicy">
             <enum>Qt::NoFocus</enum>
            </property>
+           <property name="toolTip">
+            <string>Remove overdrive</string>
+           </property>
            <property name="text">
-            <string>-</string>
+            <string/>
            </property>
           </widget>
          </item>
@@ -390,15 +435,18 @@
           </widget>
          </item>
          <item>
-          <widget class="QLineEdit" name="tempoField">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
+          <widget class="QSpinBox" name="tempoSpin">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::NoButtons</enum>
            </property>
-           <property name="maxLength">
-            <number>6</number>
+           <property name="minimum">
+            <number>20</number>
+           </property>
+           <property name="maximum">
+            <number>600</number>
+           </property>
+           <property name="value">
+            <number>120</number>
            </property>
           </widget>
          </item>
@@ -410,9 +458,32 @@
           </widget>
          </item>
          <item>
-          <widget class="QLineEdit" name="beatsField"/>
+          <widget class="QSpinBox" name="beatsSpin">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::NoButtons</enum>
+           </property>
+           <property name="minimum">
+            <number>1</number>
+           </property>
+           <property name="maximum">
+            <number>16</number>
+           </property>
+           <property name="value">
+            <number>4</number>
+           </property>
+          </widget>
          </item>
         </layout>
+       </item>
+       <item>
+        <widget class="QPushButton" name="titleCommentBtn">
+         <property name="focusPolicy">
+          <enum>Qt::NoFocus</enum>
+         </property>
+         <property name="text">
+          <string>Edit title &amp;&amp; comment</string>
+         </property>
+        </widget>
        </item>
       </layout>
      </widget>
@@ -468,7 +539,7 @@
           <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
-          <string>Watch</string>
+          <string>Follow user</string>
          </property>
         </widget>
        </item>

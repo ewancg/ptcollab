@@ -18,7 +18,7 @@ SideMenu::SideMenu(UnitListModel* units, WoiceListModel* woices,
                    DelayEffectModel* delays, OverdriveEffectModel* ovdrvs,
                    NewWoiceDialog* new_woice_dialog,
                    NewWoiceDialog* change_woice_dialog,
-                   VolumeMeterFrame* volume_meter_frame, QWidget* parent)
+                   VolumeMeterBars* volume_meter_frame, QWidget* parent)
     : QWidget(parent),
       ui(new Ui::SideMenu),
       m_add_unit_dialog(add_unit_dialog),
@@ -51,9 +51,11 @@ SideMenu::SideMenu(UnitListModel* units, WoiceListModel* woices,
   ui->unitList->setItemDelegate(m_unit_list_delegate);
   connect(ui->unitList, &TableView::hoveredRowChanged, this,
           &SideMenu::hoveredUnitChanged);
+  connect(ui->woiceList, &TableView::hoveredRowChanged, this,
+          &SideMenu::hoveredWoiceChanged);
   setPlay(false);
-  for (auto* list : {(QTableView*)ui->unitList, ui->woiceList, ui->delayList,
-                     ui->overdriveList, ui->usersList}) {
+  for (auto* list : {(QTableView*)ui->unitList, (QTableView*)ui->woiceList,
+                     ui->delayList, ui->overdriveList, ui->usersList}) {
     list->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     list->horizontalHeader()->setSectionResizeMode(
         QHeaderView::ResizeToContents);
@@ -102,7 +104,9 @@ SideMenu::SideMenu(UnitListModel* units, WoiceListModel* woices,
       emit removeUnit();
   });
   connect(ui->followCheckbox, &QCheckBox::clicked, [this](bool is_checked) {
-    emit followPlayheadClicked(is_checked ? FollowPlayhead::Jump
+    emit followPlayheadClicked(is_checked ? (Settings::StrictFollowSeek::get()
+                                                 ? FollowPlayhead::Follow
+                                                 : FollowPlayhead::Jump)
                                           : FollowPlayhead::None);
   });
   connect(ui->copyCheckbox, &QCheckBox::toggled, this, &SideMenu::copyChanged);
@@ -128,29 +132,10 @@ SideMenu::SideMenu(UnitListModel* units, WoiceListModel* woices,
             emit addWoices(new_woice_dialog->selectedWoices());
           });
 
-  connect(ui->tempoField, &QLineEdit::editingFinished, [this]() {
-    bool ok;
-    int tempo = ui->tempoField->text().toInt(&ok);
-    if (!ok || tempo < 20 || tempo > 600)
-      QMessageBox::critical(this, tr("Invalid tempo"),
-                            tr("Tempo must be number between 20 and 600"));
-    else {
-      ui->tempoField->setText(QString(tempo));
-      emit tempoChanged(tempo);
-    }
-  });
-
-  connect(ui->beatsField, &QLineEdit::editingFinished, [this]() {
-    bool ok;
-    int beats = ui->beatsField->text().toInt(&ok);
-    if (!ok || beats < 1 || beats > 16)
-      QMessageBox::critical(this, tr("Invalid beats"),
-                            tr("Beats must be number between 1 and 16"));
-    else {
-      setBeats(beats);
-      emit beatsChanged(beats);
-    }
-  });
+  connect(ui->tempoSpin, &QSpinBox::editingFinished,
+          [this]() { emit tempoChanged(ui->tempoSpin->value()); });
+  connect(ui->beatsSpin, &QSpinBox::editingFinished,
+          [this]() { emit beatsChanged(ui->beatsSpin->value()); });
 
   connect(ui->removeWoiceBtn, &QPushButton::clicked, [this]() {
     int idx = ui->woiceList->currentIndex().row();
@@ -182,9 +167,9 @@ SideMenu::SideMenu(UnitListModel* units, WoiceListModel* woices,
           });
   connect(m_add_unit_dialog, &QDialog::accepted, [this]() {
     QString name = m_add_unit_dialog->getUnitNameSelection();
-    int idx = m_add_unit_dialog->getSelectedWoiceIndex();
-    if (idx >= 0 && name != "")
-      emit addUnit(idx, name);
+    int no = m_add_unit_dialog->getSelectedWoiceIndex();
+    if (no >= 0 && name != "")
+      emit addUnit(no, name);
     else
       QMessageBox::warning(this, "Invalid unit options",
                            "Name or selected instrument invalid");
@@ -205,26 +190,24 @@ SideMenu::SideMenu(UnitListModel* units, WoiceListModel* woices,
   {
     bool ok;
     int v;
-    v = QSettings().value(VOLUME_KEY).toInt(&ok);
+    v = Settings::value(VOLUME_KEY, QVariant()).toInt(&ok);
     if (ok) ui->volumeSlider->setValue(v);
   }
   connect(ui->volumeSlider, &QSlider::valueChanged, [this](int v) {
-    QSettings().setValue(VOLUME_KEY, v);
+    Settings::setValue(VOLUME_KEY, v);
     emit volumeChanged(v);
   });
   {
     bool ok;
     double v;
-    v = QSettings()
-            .value(BUFFER_LENGTH_KEY, DEFAULT_BUFFER_LENGTH)
-            .toDouble(&ok);
+    v = Settings::value(BUFFER_LENGTH_KEY, DEFAULT_BUFFER_LENGTH).toDouble(&ok);
     if (ok) ui->bufferLength->setText(QString("%1").arg(v, 0, 'f', 2));
   }
   connect(ui->bufferLength, &QLineEdit::editingFinished, [this]() {
     bool ok;
     double length = ui->bufferLength->text().toDouble(&ok);
     if (ok) {
-      QSettings().setValue(BUFFER_LENGTH_KEY, length);
+      Settings::setValue(BUFFER_LENGTH_KEY, length);
       ui->bufferLength->clearFocus();
       emit bufferLengthChanged(length);
     }
@@ -233,22 +216,40 @@ SideMenu::SideMenu(UnitListModel* units, WoiceListModel* woices,
           [this](const QModelIndex& index) { emit userSelected(index.row()); });
   connect(ui->watchBtn, &QPushButton::clicked, [this]() {
     if (ui->usersList->selectionModel()->hasSelection())
-      emit userSelected(ui->usersList->currentIndex().row());
+      emit userFollowClicked(ui->usersList->currentIndex().row());
   });
+  connect(ui->titleCommentBtn, &QPushButton::clicked, this,
+          &SideMenu::titleCommentBtnClicked);
 }
 
 void SideMenu::setEditWidgetsEnabled(bool b) {
   // Really only this first one is necessary, since you can't add anything
   // else without it.
+
   ui->addWoiceBtn->setEnabled(b);
   ui->changeWoiceBtn->setEnabled(b);
   ui->removeWoiceBtn->setEnabled(b);
+
   ui->addUnitBtn->setEnabled(b);
   ui->removeUnitBtn->setEnabled(b);
-  ui->tempoField->setEnabled(b);
-  ui->beatsField->setEnabled(b);
   ui->upUnitBtn->setEnabled(b);
   ui->downUnitBtn->setEnabled(b);
+
+  ui->addOverdriveBtn->setEnabled(b);
+  ui->removeOverdriveBtn->setEnabled(b);
+
+  // Don't disable woiceList / unitList on startup. Otherwise the icons are
+  // greyed out sorta jarringly
+  // ui->woiceList->setEnabled(b);
+  // ui->unitList->setEnabled(b);
+  ui->overdriveList->setEnabled(b);
+  ui->delayList->setEnabled(b);
+  ui->usersList->setEnabled(b);
+
+  ui->watchBtn->setEnabled(b);
+  ui->tempoSpin->setEnabled(b);
+  ui->beatsSpin->setEnabled(b);
+  ui->titleCommentBtn->setEnabled(b);
 }
 
 void SideMenu::setTab(int index) { ui->tabWidget->setCurrentIndex(index); }
@@ -270,12 +271,8 @@ void SideMenu::setModified(bool modified) {
     ui->saveBtn->setText("");
 }
 
-void SideMenu::setTempo(int tempo) {
-  ui->tempoField->setText(QString("%1").arg(tempo));
-}
-void SideMenu::setBeats(int beats) {
-  ui->beatsField->setText(QString("%1").arg(beats));
-}
+void SideMenu::setTempo(int tempo) { ui->tempoSpin->setValue(tempo); }
+void SideMenu::setBeats(int beats) { ui->beatsSpin->setValue(beats); }
 
 void SideMenu::setFollowPlayhead(FollowPlayhead follow) {
   ui->followCheckbox->setCheckState(follow == FollowPlayhead::None
@@ -343,4 +340,10 @@ void SideMenu::setPlay(bool playing) {
   ui->saveBtn->setIcon(getIcon("save"));
   ui->upUnitBtn->setIcon(getIcon("up"));
   ui->downUnitBtn->setIcon(getIcon("down"));
+  ui->addUnitBtn->setIcon(getIcon("add"));
+  ui->removeUnitBtn->setIcon(getIcon("remove"));
+  ui->addWoiceBtn->setIcon(getIcon("add"));
+  ui->removeWoiceBtn->setIcon(getIcon("remove"));
+  ui->addOverdriveBtn->setIcon(getIcon("add"));
+  ui->removeOverdriveBtn->setIcon(getIcon("remove"));
 }

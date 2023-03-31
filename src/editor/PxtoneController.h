@@ -48,6 +48,8 @@ class PxtoneController : public QObject {
   const mooState *moo() { return m_moo_state; }
   const pxtnService *pxtn() { return m_pxtn; };
   void setVolume(int volume);
+  void setSongTitle(const QString &);
+  void setSongComment(const QString &);
 
   void setUnitPlayed(int unit_no, bool played);
   void setUnitVisible(int unit_no, bool visible);
@@ -55,6 +57,7 @@ class PxtoneController : public QObject {
   void cycleSolo(int unit_no);
   bool render_exn(
       QIODevice *file, double secs, double fadeout, double volume,
+      std::optional<size_t> solo_unit,
       std::function<bool(double progress)> should_continue = [](double) {
         return true;
       }) const;
@@ -68,10 +71,10 @@ class PxtoneController : public QObject {
   void applySetRepeatMeas(const SetRepeatMeas &a, qint64 uid);
   void applySetLastMeas(const SetLastMeas &a, qint64 uid);
   void applySetUnitName(const SetUnitName &a, qint64 uid);
-  void applySetOverdrive(const Overdrive::Set &a, qint64 uid);
-  void applyAddOverdrive(const Overdrive::Add &a, qint64 uid);
-  void applyRemoveOverdrive(const Overdrive::Remove &a, qint64 uid);
-  void applySetDelay(const Delay::Set &a, qint64 uid);
+  void applySetOverdrive(const OverdriveEffect::Set &a, qint64 uid);
+  void applyAddOverdrive(const OverdriveEffect::Add &a, qint64 uid);
+  void applyRemoveOverdrive(const OverdriveEffect::Remove &a, qint64 uid);
+  void applySetDelay(const DelayEffect::Set &a, qint64 uid);
 
  signals:
   void measureNumChanged();

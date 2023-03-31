@@ -88,12 +88,18 @@ PxtoneClient::PxtoneClient(pxtnService *pxtn,
           &PxtoneClient::processRemoteAction);
 }
 
+PxtoneClient::~PxtoneClient() {
+  m_audio->stop();
+  m_pxtn_device->setPlaying(false);
+}
+
 void PxtoneClient::loadDescriptor(pxtnDescriptor &desc) {
   // An empty desc is interpreted as an empty file so we don't error.
   m_controller->loadDescriptor(desc);
   changeEditState(
-      [](EditState &e) {
-        e.m_current_unit_id = 0;
+      [this](EditState &e) {
+        e.m_current_unit_id =
+            (unitIdMap().numUnits() > 0 ? unitIdMap().noToId(0) : 0);
         e.m_pinned_unit_ids.clear();
       },
       false);
@@ -104,13 +110,12 @@ void PxtoneClient::loadDescriptor(pxtnDescriptor &desc) {
   m_pxtn_device->open(QIODevice::ReadOnly);
   {
     bool ok;
-    int v = QSettings().value(VOLUME_KEY).toInt(&ok);
+    int v = Settings::value(VOLUME_KEY, QVariant()).toInt(&ok);
     if (ok) setVolume(v);
   }
   {
     bool ok;
-    double v = QSettings()
-                   .value(BUFFER_LENGTH_KEY, DEFAULT_BUFFER_LENGTH)
+    double v = Settings::value(BUFFER_LENGTH_KEY, DEFAULT_BUFFER_LENGTH)
                    .toDouble(&ok);
     if (ok) setBufferSize(v);
   }
@@ -133,7 +138,6 @@ void PxtoneClient::setBufferSize(double secs) {
   if (secs > 10) secs = 10;
   qDebug() << "Setting buffer size: " << secs;
   m_audio->setBufferSize(fmt.bytesForDuration(secs * 1e6));
-
   if (started) m_audio->start(m_pxtn_device);
 }
 
@@ -164,6 +168,13 @@ void PxtoneClient::resetAndSuspendAudio() {
     seekMoo(0);
 }
 
+void PxtoneClient::jumpToUser(qint64 user_id) {
+  const auto it = m_remote_edit_states.find(user_id);
+  if (it != m_remote_edit_states.end() && it->second.state.has_value())
+    emit followActivity(it->second.state.value());
+  setFollowing(std::nullopt);
+}
+
 void PxtoneClient::setFollowing(std::optional<qint64> following) {
   m_following_user = following;
 
@@ -192,6 +203,16 @@ std::set<int> PxtoneClient::selectedUnitNos() {
   for (int i = 0; i < pxtn()->Unit_Num(); ++i)
     if (pxtn()->Unit_Get(i)->get_operated()) unit_nos.insert(i);
   return unit_nos;
+}
+
+std::set<int> PxtoneClient::selectedUnitIds() {
+  std::set<int> unit_ids;
+  unit_ids.insert(editState().m_current_unit_id);
+
+  for (int i = 0; i < pxtn()->Unit_Num(); ++i)
+    if (pxtn()->Unit_Get(i)->get_operated())
+      unit_ids.insert(unitIdMap().noToId(i));
+  return unit_ids;
 }
 
 qint64 PxtoneClient::uid() const { return m_controller->uid(); }
@@ -273,6 +294,16 @@ void PxtoneClient::processRemoteAction(const ServerAction &a) {
                           emit followActivity(s);
                       }
                     },
+                    [this](const SetSongText &s) {
+                      switch (s.field) {
+                        case SetSongText::Title:
+                          m_controller->setSongTitle(s.text);
+                          break;
+                        case SetSongText::Comment:
+                          m_controller->setSongComment(s.text);
+                          break;
+                      }
+                    },
                     [this, uid](const WatchUser &) {
                       // TODO: Maybe remember who's watching whom so that if you
                       // watch them you follow their watchee too?
@@ -325,16 +356,16 @@ void PxtoneClient::processRemoteAction(const ServerAction &a) {
                     [this, uid](const SetLastMeas &s) {
                       m_controller->applySetLastMeas(s, uid);
                     },
-                    [this, uid](const Overdrive::Add &s) {
+                    [this, uid](const OverdriveEffect::Add &s) {
                       m_controller->applyAddOverdrive(s, uid);
                     },
-                    [this, uid](const Overdrive::Set &s) {
+                    [this, uid](const OverdriveEffect::Set &s) {
                       m_controller->applySetOverdrive(s, uid);
                     },
-                    [this, uid](const Overdrive::Remove &s) {
+                    [this, uid](const OverdriveEffect::Remove &s) {
                       m_controller->applyRemoveOverdrive(s, uid);
                     },
-                    [this, uid](const Delay::Set &s) {
+                    [this, uid](const DelayEffect::Set &s) {
                       m_controller->applySetDelay(s, uid);
                     },
                     [this, uid](const AddWoice &s) {
@@ -348,12 +379,13 @@ void PxtoneClient::processRemoteAction(const ServerAction &a) {
                               tr("Could not add voice %1").arg(s.name));
                       } else if (uid == m_controller->uid() &&
                                  Settings::AutoAddUnit::get()) {
-                        int woice_id = m_controller->pxtn()->Woice_Num() - 1;
+                        int woice_no = m_controller->pxtn()->Woice_Num() - 1;
                         QString name = shift_jis_codec->toUnicode(
-                            pxtn()->Woice_Get(woice_id)->get_name_buf_jis(
+                            pxtn()->Woice_Get(woice_no)->get_name_buf_jis(
                                 nullptr));
-                        sendAction(
-                            AddUnit{woice_id, name, QString("u-%1").arg(name)});
+                        sendAction(AddUnit{
+                            woice_no, Settings::NewUnitDefaultVolume::get(),
+                            name, QString("u-%1").arg(name)});
                       }
                     },
                     [this, uid](const RemoveWoice &s) {
@@ -500,8 +532,8 @@ void PxtoneClient::removeUnusedUnitsAndWoices() {
   std::set<int> unitNosInUse;
   std::set<int> woiceNosInUse;
 
-  // Walk through the project to see which units have ON events, and what woices
-  // are active during those on events
+  // Walk through the project to see which units have ON events, and what
+  // woices are active during those on events
   std::vector<int> currentWoiceNos(pxtn()->Unit_Num(), 0);
   for (const EVERECORD *e = pxtn()->evels->get_Records(); e != nullptr;
        e = e->next)

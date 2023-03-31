@@ -9,13 +9,16 @@ QMessageBox::about {
 
 QPushButton,
 QLineEdit,
-QComboBox {
+QComboBox,
+QSpinBox,
+QTextEdit {
   padding: 2px 6px;
 }
 
 QLabel,
 QPushButton,
-QCheckBox {
+QCheckBox,
+QRadioButton {
   color: #D2CA9C;
 }
 
@@ -32,7 +35,8 @@ QMenu {
   border-image: url("image/menu-border.png") 1px fill;
 }
 
-QCheckBox {
+QCheckBox,
+QRadioButton {
   spacing: 5px;
 }
 
@@ -46,13 +50,16 @@ QMenuBar::item {
 }
 
 QLineEdit,
-QListView {
+QListView,
+QSpinBox,
+QTextEdit {
   color: #00F080;
 }
 
 QLabel:disabled,
 QPushButton:disabled,
-QCheckBox:disabled {
+QCheckBox:disabled,
+QRadioButton:disabled {
   color: #837E78;
 }
 
@@ -62,7 +69,8 @@ QMenuBar::item:disabled {
 }
 
 QLineEdit:disabled,
-QListView:disabled {
+QListView:disabled,
+QTextEdit:disabled {
   color: #4E4B61;
 }
 
@@ -192,17 +200,20 @@ QComboBox QAbstractItemView {
 
 QCheckBox::indicator,
 QGroupBox::indicator,
+QRadioButton::indicator,
 QTableView::indicator {
   border: 2px transparent;
 }
 
 QCheckBox::indicator:unchecked,
 QGroupBox::indicator:unchecked,
+QRadioButton::indicator:unchecked,
 QTableView::indicator:unchecked {
   border-image: url("image/checkbox-border-off.png"), 2px 2px 2px 2px fill, stretch stretch;
 }
 
 QCheckBox::indicator:checked,
+QRadioButton::indicator:checked,
 QGroupBox::indicator:checked,
 QTableView::indicator:checked {
   border-image: url("image/checkbox-border-on.png"), 2px 2px 2px 2px fill, stretch stretch;
@@ -212,7 +223,22 @@ QFrame {
   background-color: #4E4B61;
 }
 
-QLineEdit {
+QFrame[frameShape="4"] {
+	max-height: 0;
+	height: 0;
+	border: 1px;
+	border-image: url("image/generic-frame.png") 0px 1px 0px 1px fill, stretch stretch;
+}
+QFrame[frameShape="5"] {
+	max-width: 0;
+	width: 0;
+	border: 1px;
+	border-image: url("image/generic-frame.png") 1px 0px 1px 0px fill, stretch stretch;
+}
+
+QLineEdit,
+QSpinBox,
+QTextEdit {
   font-weight: bold;
   border: 1px transparent;
   border-image: url("image/lineedit-border.png"), 1px 1px 1px 1px fill, stretch stretch;
@@ -352,4 +378,9 @@ QScrollBar::up-arrow:pressed {
 QScrollBar::down-arrow:hover,
 QScrollBar::down-arrow:pressed {
   image: url("image/scrollbar-down-down.png");
+}
+
+VolumeMeterWidget QFrame {
+    border: 1px;
+    border-image: url("image/generic-frame.png") 0px 1px 0px 1px fill, stretch stretch;
 }

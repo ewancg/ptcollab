@@ -3,15 +3,16 @@
 #include <QDataStream>
 
 #include "ComboOptions.h"
+#include "Settings.h"
 #include "protocol/SerializeVariant.h"
 #include "pxtone/pxtnEvelist.h"
 
 QDataStream &operator>>(QDataStream &in, Input::Event::On &a) {
-  return (in >> a.key >> a.vel);
+  return (in >> a.key >> a.raw_vel);
 }
 
 QDataStream &operator<<(QDataStream &out, const Input::Event::On &a) {
-  return (out << a.key << a.vel);
+  return (out << a.key << a.raw_vel);
 }
 
 QDataStream &operator>>(QDataStream &in, Input::State::On &a) {
@@ -45,7 +46,7 @@ MouseEditState::MouseEditState()
       last_pitch(EVENTDEFAULT_KEY),
       start_clock(0),
       current_clock(0),
-      kind(MouseKeyboardEdit({0, 0})),
+      kind(MouseKeyboardEdit({MouseMainKeyboard{0}, 0})),
       selection(std::nullopt) {}
 
 QDataStream &operator<<(QDataStream &out, const MouseEditState &a) {
@@ -123,3 +124,21 @@ std::vector<Interval> Input::State::On::clock_ints(
   }
   return clock_ints;
 }
+
+namespace Input {
+namespace State {
+
+QDataStream &operator<<(QDataStream &out, const State &a) {
+  return (out << a.notes_by_id);
+}
+QDataStream &operator>>(QDataStream &in, State &a) {
+  return (in >> a.notes_by_id);
+}
+}  // namespace State
+namespace Event {
+int On::vel() const {
+  if (Settings::VelocitySensitivity::get()) return raw_vel;
+  return EVENTDEFAULT_VELOCITY;
+}
+}  // namespace Event
+}  // namespace Input

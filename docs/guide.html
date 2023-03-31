@@ -121,7 +121,7 @@
             <li>Once something’s selected, you can use Up/Down to shift a parameter, or Ctrl+Up/Down to transpose.</li>
             <li>The hand tool can be accessed by Ctrl+click, instead of being a separate tool.</li>
             <li>Seeking is by Shift+click. To reset the playhead after playback, stop the song (ESC) instead of pausing (space).</li>
-            <li>There’s no unit view, but only a keyboard view (for now)</li>
+            <li>Instead of a unit view, you can <i>pin units</i> above the piano roll. See info about the unit tab below.</li>
             <li>More gestures and shortcuts for navigation and editing, described below.</li>
           </ul>
         </div>
@@ -138,7 +138,7 @@
           <div class="text">
             <ol>
               <li>Repeat sample. For wav and ogg voices, you can toggle this to have the sample stop after one loop, or repeat as long as the note is held.</li>
-              <li>Beat fit. For wav and ogg voices, you can toggle this so that the sample always plays for 1 whole beat on note A4. This is useful for certain percussion sounds if you want to fix their start and end times.</li>
+              <li>Beat fit. For wav and ogg voices, you can toggle this so that on A4, the sample always plays for 1 whole beat. This is useful for certain percussion sounds if you want to fix their start and end times. For example, you wanted something to sound for 4 beats exactly, you could put it 2 octaves below A4. </li>
               <li>Base key. If beat fit isn’t checked, change this to transpose this voice by a number of semitones. It’s inverted, so lower it if you want everything to sound higher. Double-click to edit.</li>
               <li>Name. The name of the voice. Double-click to edit.</li>
             </ol>
@@ -152,8 +152,8 @@
             <ol>
               <li>Visible. Toggle if the unit is visible in the background while you’re focused on a different unit.</li>
               <li>Playing. Toggle if the unit is playing or muted.</li>
-              <li>Selected. When making a selection, toggle if the unit is included or not while you’re focused on a different unit. </li>
-              <li>Name. The name of the unit. Double-click to edit.</li>
+              <li>Pinned. Toggle if the unit is pinned to the top of the piano roll, so that you can edit its note timings even while another unit is focused (useful for drums). Editing a pinned unit is similar to the regular piano roll - click to add notes, right-click to delete. </li>
+              <li>Name. The name of the unit. Double-click to edit. Ctrl+click to select it for copy / paste. </li>
             </ol>
           </div>
         </div>
@@ -225,6 +225,27 @@
           </div>
         </div>
 
+        <a class="h3" href="#" onclick="toggle('how-navigate');return false">Navigate my project quickly?</a>
+        <div id="how-navigate" style="display:none">
+          <div class="text"><p>This may mean one of two things: moving to different times in the song, or to different units.</p>
+            <p>Jumping around to different times in the song usually involves the mouse. In particular:
+            <ul>
+              <li>Ctrl+scroll and Ctrl+shift+scroll to zoom in and out.</li>
+              <li>Middle-click drag to pan around.</li>
+            </ul>
+            <a href="resources/panning.mp4">Here's a video</a>.
+            </p>
+            <p>Jumping around to different units can be done with either the mouse or keyboard. Options:</p>
+            <ul>
+              <li>You can click on the units in the unit tab.</li>
+              <li>You can press W / S / PgUp / PgDn to go to the next / previous unit. </li>
+              <li>You can press 1..9 to jump to that numbered unit. </li>
+              <li>You can press R and click to jump to a pinned unit, or a unit in the background of the piano roll. </li>
+            </ul>
+            <a href="resources/jump-to-unit.mp4">Here's a video</a>.
+          </div>
+        </div>
+
         <a class="h3" href="#" onclick="toggle('how-cnp');return false">Copy and paste?</a>
         <div id="how-cnp" style="display:none">
           <p class="text">Make a selection with Ctrl+Shift+Drag.</p>
@@ -234,7 +255,11 @@
           <p class="text">Press Ctrl + V.</p>
           <img src="resources/cnp-paste.png" class="screenshot" alt="paste for copy and paste" />
           <h4>Advanced copy and paste</h4>
-          <p class="text">You can also copy and paste over multiple units if you check the selection checkbox (the third box) in the Unit tab.</p>
+          <p class="text">You can also copy and paste over multiple units if you Ctrl+Click the unit names to select other units.</p>
+          <h4>Video</h4>
+          <p class="text">The video below shows normal copy-paste, then a copy-paste with multiple units.</p>
+          <video src="resources/copy-paste.mp4" style="width:70%; margin:auto; display:block" controls />
+          <p class="text">You can also copy and paste over multiple units if you Ctrl+Click the unit names to select other units.</p>
           <img src="resources/cnp-multi-unit.png" class="screenshot" alt="multi-unit copy" />
           <p class="text">Additionally, the “Copy” checkbox in the bottom left can be used to set only certain parameters to be copied. If you want to only copy panning, for example, you can untick the checkbox for each other parameter setting, then copy and paste.</p>
           <img src="resources/cnp-certain-params.png" class="screenshot" alt="copy certain params" />
@@ -263,8 +288,8 @@
           <p class="text">Go to Options &gt; Settings &gt; MIDI and select your midi device.</p>
           <img src="resources/midi-set-device.png" class="screenshot" alt="choosing midi device" />
           <p class="text">From here, there are two ways to input midi: live or with step controls.</p>
-          <p class="text">To record live, simply start the song and play notes to have them be recorded! If you're like me and not great at playing perfect rhythms, you might want to quantize your notes afterwards. The shortcuts list below describes how.</p>
-          <p class="text">To record with step controls, input notes while the song <em>isn't</em> playing, and use J/L to move back and forward in time by the current quantization.</p>
+          <p class="text">Press Ctrl+R to enable recording, then start the song and play your notes! If you're like me and not great at playing perfect rhythms, you might want to quantize your notes afterwards. The shortcuts list below describes how.</p>
+          <p class="text">To record with step controls, input notes while the song <em>isn't</em> playing, and use J/L to move back and forward in time by the current quantization. Make sure you're still in recording mode. </p>
           <div class="text">Here are some useful shortcuts:
           <ul>
             <li>Quantization: Select (see Copy and Paste section above), then Alt+Q.</li>
@@ -278,8 +303,7 @@
       <section>
         <a class="h3" href="#" onclick="toggle('glossary-shortcuts');return false">Glossary of shortcuts</a>
         <div class="text" id="glossary-shortcuts" style="display:none">
-          <p>Once you're familiar with the basic workflow, there are a bunch of
-          shortcuts to make certain actions easier:</p>
+          <p>All the shortcuts are in the editor help, but here are some common ones:</p>
           <ul>
             <li>Space to play/pause, Escape to stop, Shift+click to seek</li>
             <li>Ctrl+Z and Ctrl+Y/Ctrl+Shift+Z to undo and redo</li>

@@ -3,6 +3,7 @@
 #include <QMessageBox>
 
 #include "BasicWoiceListModel.h"
+#include "SongTitleDialog.h"
 #include "editor/ComboOptions.h"
 #include "editor/Settings.h"
 
@@ -20,7 +21,7 @@ PxtoneSideMenu::PxtoneSideMenu(PxtoneClient *client, MooClock *moo_clock,
                new DelayEffectModel(client, parent),
                new OverdriveEffectModel(client, parent), new_woice_dialog,
                change_woice_dialog,
-               new VolumeMeterFrame(
+               new VolumeMeterBars(
                    client,
                    nullptr)),  // VolumeMeterWidget gets reparented which causes
                                // some weird lifetime issues with its children
@@ -53,11 +54,11 @@ PxtoneSideMenu::PxtoneSideMenu(PxtoneClient *client, MooClock *moo_clock,
           [this](int tempo) { m_client->sendAction(TempoChange{tempo}); });
   connect(this, &SideMenu::beatsChanged,
           [this](int beat) { m_client->sendAction(BeatChange{beat}); });
-  connect(this, &SideMenu::addUnit, [this](int woice_id, QString unit_name) {
+  connect(this, &SideMenu::addUnit, [this](int woice_no, QString unit_name) {
     m_client->sendAction(AddUnit{
-        woice_id,
+        woice_no, Settings::NewUnitDefaultVolume::get(),
         shift_jis_codec->toUnicode(
-            m_client->pxtn()->Woice_Get(woice_id)->get_name_buf_jis(nullptr)),
+            m_client->pxtn()->Woice_Get(woice_no)->get_name_buf_jis(nullptr)),
         unit_name});
   });
   connect(this, &SideMenu::addWoices, [this](const std::vector<AddWoice> &ws) {
@@ -168,9 +169,9 @@ PxtoneSideMenu::PxtoneSideMenu(PxtoneClient *client, MooClock *moo_clock,
   connect(m_client->clipboard(), &Clipboard::copyKindsSet, this,
           &PxtoneSideMenu::refreshCopyCheckbox);
   connect(this, &SideMenu::addOverdrive,
-          [this]() { m_client->sendAction(Overdrive::Add{}); });
+          [this]() { m_client->sendAction(OverdriveEffect::Add{}); });
   connect(this, &SideMenu::removeOverdrive, [this](int ovdrv_no) {
-    m_client->sendAction(Overdrive::Remove{ovdrv_no});
+    m_client->sendAction(OverdriveEffect::Remove{ovdrv_no});
   });
   connect(this, &SideMenu::moveUnit, [this](bool up) {
     m_client->sendAction(MoveUnit{m_client->editState().m_current_unit_id, up});
@@ -178,11 +179,32 @@ PxtoneSideMenu::PxtoneSideMenu(PxtoneClient *client, MooClock *moo_clock,
   connect(this, &SideMenu::volumeChanged, m_client, &PxtoneClient::setVolume);
   connect(this, &SideMenu::bufferLengthChanged, m_client,
           &PxtoneClient::setBufferSize);
-  connect(this, &SideMenu::userSelected, [this](int user_no) {
+  connect(this, &SideMenu::userFollowClicked, [this](int user_no) {
     if (m_client->remoteEditStates().size() <= uint(user_no)) return;
     auto it = m_client->remoteEditStates().begin();
     std::advance(it, user_no);
     m_client->setFollowing(it->first);
+  });
+  connect(this, &SideMenu::userSelected, [this](int user_no) {
+    if (m_client->remoteEditStates().size() <= uint(user_no)) return;
+    auto it = m_client->remoteEditStates().begin();
+    std::advance(it, user_no);
+    m_client->jumpToUser(it->first);
+  });
+  connect(this, &SideMenu::titleCommentBtnClicked, this, [this]() {
+    QString title = shift_jis_codec->toUnicode(
+        m_client->pxtn()->text->get_name_buf(nullptr));
+    QString comment = shift_jis_codec->toUnicode(
+        m_client->pxtn()->text->get_comment_buf(nullptr));
+    // qDebug() << title << comment;
+    SongTitleDialog dialog(title, comment, this);
+    if (dialog.exec()) {
+      if (title != dialog.title())
+        m_client->sendAction(SetSongText{SetSongText::Title, dialog.title()});
+      if (comment != dialog.comment())
+        m_client->sendAction(
+            SetSongText{SetSongText::Comment, dialog.comment()});
+    }
   });
   refreshCopyCheckbox();
 }

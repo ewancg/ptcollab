@@ -23,14 +23,18 @@
 #include "InputEvent.h"
 #include "Settings.h"
 #include "WelcomeDialog.h"
+#include "editor/StyleEditor.h"
 #include "pxtone/pxtnDescriptor.h"
 #include "ui_EditorWindow.h"
 #include "views/MeasureView.h"
 #include "views/MooClock.h"
 #include "views/ParamView.h"
+#include "views/ViewHelper.h"
 
 // TODO: Maybe we could not hard-code this and change the engine to be dynamic
 // w/ smart pointers.
+
+#undef EVENT_MAX  // winuser.h conflict -- warns without
 static constexpr int EVENT_MAX = 1000000;
 
 static constexpr int AUTOSAVE_CHECK_INTERVAL_MS = 1 * 1000;
@@ -111,17 +115,24 @@ EditorWindow::EditorWindow(QWidget *parent)
   m_scroll_area->setWidget(m_keyboard_view);
 
   // TODO: find a better place for this.
+  connect(m_keyboard_view, &KeyboardView::setScrollOnClick, m_scroll_area,
+          &EditorScrollArea::setEnableScrollWithMouseX);
   connect(m_keyboard_view, &KeyboardView::ensureVisibleX,
           [this](int x, bool strict) {
             if (!strict)
               m_scroll_area->ensureWithinMargin(x, -0.02, 0.15, 0.15, 0.75);
             else
-              m_scroll_area->ensureWithinMargin(x, 0.5, 0.5, 0.5, 0.5);
+              m_scroll_area->ensureWithinMargin(x, 0.45, 0.45, 0.45, 0.45);
           });
   connect(m_scroll_area, &EditorScrollArea::viewportChanged,
           [this](const QRect &viewport) {
             m_client->changeEditState(
-                [&](EditState &e) { e.viewport = viewport; }, true);
+                [&](EditState &e) {
+                  // Logical coords of just the roll area w/o the left piano
+                  e.viewport = worldTransform().inverted().mapRect(viewport);
+                  e.viewport.adjust(Settings::LeftPianoWidth::get(), 0, 0, 0);
+                },
+                true);
           });
   connect(m_client, &PxtoneClient::followActivity, [this](const EditState &r) {
     m_client->changeEditState(
@@ -139,10 +150,14 @@ EditorWindow::EditorWindow(QWidget *parent)
           // disable follow playhead b/c otherwise it could compete with follow
           // user for adjusting scrollbars.
           e.m_follow_playhead = FollowPlayhead::None;
-          m_scroll_area->horizontalScrollBar()->setValue(startClock /
-                                                         e.scale.clockPerPx);
-          m_scroll_area->verticalScrollBar()->setValue(startPitch /
-                                                       e.scale.pitchPerPx);
+          // Logical coords of roll area with left piano
+          QPointF logical_pos{
+              startClock / e.scale.clockPerPx - Settings::LeftPianoWidth::get(),
+              startPitch / e.scale.pitchPerPx};
+          // Scroll coords of roll area with left piano
+          QPointF scroll_pos = worldTransform().map(logical_pos);
+          m_scroll_area->horizontalScrollBar()->setValue(scroll_pos.x());
+          m_scroll_area->verticalScrollBar()->setValue(scroll_pos.y());
         },
         true);
   });
@@ -192,11 +207,35 @@ EditorWindow::EditorWindow(QWidget *parent)
   connect(m_side_menu, &SideMenu::hoveredUnitChanged, m_measure_view,
           &MeasureView::setFocusedUnit);
   connect(m_side_menu, &SideMenu::hoveredUnitChanged, m_keyboard_view,
-          &KeyboardView::setFocusedUnit);
+          [&](std::optional<int> no) {
+            m_keyboard_view->setFocusState(
+                (no.has_value()
+                     ? std::optional(KeyboardFocus::UnitFocused{no.value()})
+                     : std::nullopt));
+          });
+  connect(m_side_menu, &SideMenu::hoveredWoiceChanged, m_keyboard_view,
+          [&](std::optional<int> no) {
+            m_keyboard_view->setFocusState(
+                (no.has_value()
+                     ? std::optional(KeyboardFocus::WoiceFocused{no.value()})
+                     : std::nullopt));
+          });
+  // Below is just so that if you change units with W/S while hovered, the
+  // highlighted unit isn't hijacked by your current mouse position.
+  connect(m_side_menu, &SideMenu::currentUnitChanged, m_keyboard_view,
+          [this](int) { m_keyboard_view->setFocusState(std::nullopt); });
+
   connect(m_measure_view, &MeasureView::hoverUnitNoChanged, m_side_menu,
-          &SideMenu::setFocusedUnit);
+          [this](std::optional<int> unit_no, bool) {
+            m_side_menu->setFocusedUnit(unit_no);
+          });
   connect(m_measure_view, &MeasureView::hoverUnitNoChanged, m_keyboard_view,
-          &KeyboardView::setFocusedUnit);
+          [this](std::optional<int> unit_no, bool selecting_unit) {
+            m_keyboard_view->setFocusState(
+                selecting_unit && unit_no.has_value()
+                    ? std::optional(KeyboardFocus::UnitFocused{unit_no.value()})
+                    : std::nullopt);
+          });
   connect(m_keyboard_view, &KeyboardView::hoverUnitNoChanged, m_measure_view,
           &MeasureView::setFocusedUnit);
   connect(m_keyboard_view, &KeyboardView::hoverUnitNoChanged, m_side_menu,
@@ -236,7 +275,7 @@ EditorWindow::EditorWindow(QWidget *parent)
     if (QMessageBox::question(this, tr("Clear settings"),
                               tr("Are you sure you want to clear your app "
                                  "settings?")))
-      QSettings().clear();
+      Settings::clear();
   });
   connect(ui->actionDecrease_font_size, &QAction::triggered,
           &Settings::TextSize::decrease);
@@ -315,7 +354,14 @@ EditorWindow::EditorWindow(QWidget *parent)
   }
 }
 
-EditorWindow::~EditorWindow() { delete ui; }
+EditorWindow::~EditorWindow() {
+  // https://github.com/yuxshao/ptcollab/issues/56
+  // This deletion is so that m_moo_clock is deleted before pxtnService, which
+  // reads as part of an animation tick, is deleted.
+  delete m_moo_clock;
+
+  delete ui;
+}
 
 // #define DEBUG_RECORD_INPUT
 
@@ -360,7 +406,7 @@ void EditorWindow::keyPressEvent(QKeyEvent *event) {
     case Qt::Key_C:
       if (event->modifiers() & Qt::ControlModifier)
         m_keyboard_view->copySelection();
-      else {
+      else if (event->modifiers() & Qt::ShiftModifier) {
         EVENTKIND kind =
             paramOptions()[m_client->editState().current_param_kind_idx()]
                 .second;
@@ -397,7 +443,9 @@ void EditorWindow::keyPressEvent(QKeyEvent *event) {
       m_client->changeEditState(
           [&](EditState &s) {
             s.m_follow_playhead = s.m_follow_playhead == FollowPlayhead::None
-                                      ? FollowPlayhead::Jump
+                                      ? (Settings::StrictFollowSeek::get()
+                                             ? FollowPlayhead::Follow
+                                             : FollowPlayhead::Jump)
                                       : FollowPlayhead::None;
           },
           false);
@@ -471,7 +519,18 @@ void EditorWindow::keyPressEvent(QKeyEvent *event) {
       }
       break;
     case Qt::Key::Key_R:
-      rKeyStateChanged(true);
+      if (event->modifiers() & Qt::ControlModifier && !event->isAutoRepeat()) {
+#ifdef QT_DEBUG
+        if (event->modifiers() & Qt::ShiftModifier)
+          StyleEditor::tryLoadStyle(Settings::StyleName::get());
+        else
+          Settings::RecordMidi::set(!Settings::RecordMidi::get());
+#else
+        Settings::RecordMidi::set(!Settings::RecordMidi::get());
+#endif
+      } else {
+        rKeyStateChanged(true);
+      }
       break;
     case Qt::Key_S:
       if (!(event->modifiers() & Qt::ControlModifier))
@@ -648,28 +707,82 @@ void EditorWindow::rKeyStateChanged(bool state) {
   m_keyboard_view->setSelectUnitEnabled(state);
 }
 
-void applyOn(const Input::State::On &v, int end, PxtoneClient *client) {
+void applyOn(const Input::State::On &v, int unit_id, int end,
+             PxtoneClient *client) {
   std::vector<Interval> clock_ints = v.clock_ints(end, client->pxtn()->master);
   // TODO: Dedup
   using namespace Action;
   std::list<Primitive> actions;
   for (const auto &clock_int : clock_ints) {
-    actions.push_back({EVENTKIND_ON, client->editState().m_current_unit_id,
-                       clock_int.start, Delete{clock_int.end}});
-    actions.push_back({EVENTKIND_VELOCITY,
-                       client->editState().m_current_unit_id, clock_int.start,
-                       Delete{clock_int.end}});
-    actions.push_back({EVENTKIND_KEY, client->editState().m_current_unit_id,
-                       clock_int.start, Delete{clock_int.end}});
-    actions.push_back({EVENTKIND_ON, client->editState().m_current_unit_id,
-                       clock_int.start, Add{clock_int.length()}});
-    actions.push_back({EVENTKIND_VELOCITY,
-                       client->editState().m_current_unit_id, clock_int.start,
-                       Add{v.on.vel}});
-    actions.push_back({EVENTKIND_KEY, client->editState().m_current_unit_id,
-                       clock_int.start, Add{v.on.key}});
+    actions.push_back(
+        {EVENTKIND_ON, unit_id, clock_int.start, Delete{clock_int.end}});
+    actions.push_back(
+        {EVENTKIND_VELOCITY, unit_id, clock_int.start, Delete{clock_int.end}});
+    actions.push_back(
+        {EVENTKIND_KEY, unit_id, clock_int.start, Delete{clock_int.end}});
+    actions.push_back(
+        {EVENTKIND_ON, unit_id, clock_int.start, Add{clock_int.length()}});
+    actions.push_back(
+        {EVENTKIND_VELOCITY, unit_id, clock_int.start, Add{v.on.vel()}});
+    actions.push_back({EVENTKIND_KEY, unit_id, clock_int.start, Add{v.on.key}});
   }
   if (actions.size() > 0) client->applyAction(actions);
+}
+
+struct FinalizedMidiNote {
+  Input::State::On details;
+  int unit_id;
+};
+
+std::vector<FinalizedMidiNote> receiveOnEvent(
+    const Input::Event::On &e, int now, Input::State::State &state,
+    const std::set<int> &selected_unit_ids) {
+  std::vector<FinalizedMidiNote> finalized;
+  // take out all things not currently selected
+  for (auto it = state.notes_by_id.begin(); it != state.notes_by_id.end();) {
+    if (selected_unit_ids.count(it->first) == 0) {
+      finalized.push_back({it->second, it->first});
+      it = state.notes_by_id.erase(it);
+    } else
+      ++it;
+  }
+  // if it's full take out the first input note
+  if (state.notes_by_id.size() == selected_unit_ids.size()) {
+    auto it = state.notes_by_id.begin();
+    auto min = state.notes_by_id.begin();
+    while (it != state.notes_by_id.end()) {
+      if (it->second.start_clock < min->second.start_clock) min = it;
+      ++it;
+    }
+    if (min != state.notes_by_id.end()) {
+      finalized.push_back({min->second, min->first});
+      state.notes_by_id.erase(min);
+    }
+  }
+  // if there's more than 1 empty space put it in the lowest one (or the one
+  // whose last note was closest?)
+  for (auto i : selected_unit_ids) {
+    if (state.notes_by_id.count(i) == 0) {
+      state.notes_by_id[i] = Input::State::On{now, e};
+      break;
+    }
+  }
+  return finalized;
+}
+std::vector<FinalizedMidiNote> receiveOffEvent(
+    const Input::Event::Off &e, Input::State::State &state,
+    const std::set<int> &selected_unit_ids) {
+  std::vector<FinalizedMidiNote> finalized;
+  // take out all things not currently selected + the thing that was just turned
+  // off
+  for (auto it = state.notes_by_id.begin(); it != state.notes_by_id.end();) {
+    if (selected_unit_ids.count(it->first) == 0 || it->second.on.key == e.key) {
+      finalized.push_back({it->second, it->first});
+      it = state.notes_by_id.erase(it);
+    } else
+      ++it;
+  }
+  return finalized;
 }
 
 void EditorWindow::recordInput(const Input::Event::Event &e) {
@@ -686,44 +799,48 @@ void EditorWindow::recordInput(const Input::Event::Event &e) {
           [this](const Input::Event::On &e) {
             // TODO: handle repeat
             int start = m_moo_clock->nowNoWrap();
-            m_client->changeEditState(
-                [&](EditState &state) {
-                  if (state.m_input_state.has_value()) {
-                    applyOn(state.m_input_state.value(), start, m_client);
-                  }
-                  state.m_input_state = Input::State::On{start, e};
-                },
-                false);
+            if (Settings::RecordMidi::get()) {
+              m_client->changeEditState(
+                  [&](EditState &state) {
+                    for (const FinalizedMidiNote &a :
+                         receiveOnEvent(e, start, state.m_input_state,
+                                        m_client->selectedUnitIds()))
+                      applyOn(a.details, a.unit_id, start, m_client);
+                  },
+                  false);
+            }
             auto maybe_unit_no = m_client->unitIdMap().idToNo(
                 m_client->editState().m_current_unit_id);
             if (maybe_unit_no != std::nullopt) {
               qint32 unit_no = maybe_unit_no.value();
-              int key = Settings::PolyphonicMidiNotePreview::get() ? e.key : -1;
+              if (!Settings::PolyphonicMidiNotePreview::get()) {
+                m_record_note_preview.clear();
+                m_keyboard_view->currentMidiNotes().clear();
+              }
               bool chordPreview =
                   (!Settings::PolyphonicMidiNotePreview::get()) &&
                   Settings::ChordPreview::get() && !m_client->isPlaying();
-              m_record_note_preview[key] = std::make_unique<NotePreview>(
+              m_record_note_preview[e.key] = std::make_unique<NotePreview>(
                   &m_pxtn, &m_client->moo()->params, unit_no, start, e.key,
-                  e.vel, m_client->audioState()->bufferSize(), chordPreview,
+                  e.vel(), m_client->audioState()->bufferSize(), chordPreview,
                   this);
+
+              m_keyboard_view->currentMidiNotes()[e.key] = e.vel();
             }
-            if (Settings::AutoAdvance::get() && !m_client->isPlaying())
+            if (Settings::AutoAdvance::get() && Settings::RecordMidi::get() &&
+                !m_client->isPlaying())
               recordInput(Input::Event::Skip{1});
           },
           [this](const Input::Event::Off &e) {
             m_client->changeEditState(
                 [&](EditState &state) {
-                  int key =
-                      Settings::PolyphonicMidiNotePreview::get() ? e.key : -1;
-                  m_record_note_preview[key].reset();
+                  m_record_note_preview[e.key].reset();
+                  m_keyboard_view->currentMidiNotes().erase(e.key);
 
-                  if (state.m_input_state.has_value()) {
-                    Input::State::On &v = state.m_input_state.value();
-                    if (v.on.key == e.key) {
-                      applyOn(v, m_moo_clock->nowNoWrap(), m_client);
-                      state.m_input_state.reset();
-                    }
-                  }
+                  for (const FinalizedMidiNote &a : receiveOffEvent(
+                           e, state.m_input_state, m_client->selectedUnitIds()))
+                    applyOn(a.details, a.unit_id, m_moo_clock->nowNoWrap(),
+                            m_client);
                 },
                 false);
           },
@@ -798,13 +915,20 @@ void EditorWindow::checkForOldAutoSaves() {
     QFileInfo f(it.next());
     if (QDateTime::currentDateTime() >=
         f.lastModified().addMSecs(3 * AUTOSAVE_CHECK_INTERVAL_MS)) {
-      auto result = QMessageBox::question(
+      auto result = QMessageBox::information(
           this, tr("Found backup files from previous run"),
           tr("Old backup save files found. This usually happens if a "
-             "previous ptcollab session quit unexpxectedly. Would you "
-             "like "
-             "to open the backup directory?"));
-      if (result == QMessageBox::Yes) QDesktopServices::openUrl(autoSaveDir());
+             "previous ptcollab session quit unexpxectedly. Opening backup "
+             "folder. If you want to stop seeing this message, simply "
+             "remove all the files from the folder (%1). ")
+              .arg(autoSaveDir()));
+      if (result == QMessageBox::Ok) {
+        if (!QDesktopServices::openUrl(autoSaveDir()))
+          QMessageBox::information(this, tr("Unable to open backup folder"),
+                                   tr("Unable to open backup folder. You can "
+                                      "access your backups at %1")
+                                       .arg(autoSaveDir()));
+      }
       break;
     }
   }
@@ -942,7 +1066,6 @@ bool EditorWindow::saveToFile(QString filename, bool warnOnError) {
 }
 
 bool EditorWindow::save(bool forceSelectFilename) {
-  QSettings settings;
   QString filename;
   if (m_filename.has_value() && !forceSelectFilename)
     filename = m_filename.value();
@@ -974,8 +1097,10 @@ bool EditorWindow::save(bool forceSelectFilename) {
   return saved;
 }
 
+static QRegularExpression forbidden_filename_character_matcher("[\\/\"]+");
 void EditorWindow::render() {
   double length, fadeout, volume;
+  bool separate_units;
   double secs_per_meas =
       m_pxtn.master->get_beat_num() / m_pxtn.master->get_beat_tempo() * 60;
   const pxtnMaster *m = m_pxtn.master;
@@ -989,41 +1114,79 @@ void EditorWindow::render() {
     length = m_render_dialog->renderLength();
     fadeout = m_render_dialog->renderFadeout();
     volume = m_render_dialog->renderVolume();
+    separate_units = m_render_dialog->renderUnitsSeparately();
   } catch (QString &e) {
     QMessageBox::warning(this, tr("Render settings invalid"), e);
     return;
   }
 
-  if (QFileInfo(m_render_dialog->renderDestination()).suffix() != "wav") {
-    QMessageBox::warning(this, tr("Could not render"),
-                         tr("Filename must end with .wav"));
-    return;
-  }
+  std::vector<std::pair<QString, std::optional<int>>> filenames_and_units;
+  if (!separate_units) {
+    if (QFileInfo(m_render_dialog->renderDestination()).suffix() != "wav") {
+      QMessageBox::warning(this, tr("Could not render"),
+                           tr("Filename must end with .wav"));
+      return;
+    }
+    filenames_and_units.push_back(
+        {m_render_dialog->renderDestination(), std::nullopt});
+  } else {
+    QFileInfo dir(m_render_dialog->renderDestination());
+    if (!dir.isDir()) {
+      QMessageBox::warning(this, tr("Could not render"),
+                           tr("Filename must be a directory"));
+      return;
+    }
+    for (int unit_no = 0; unit_no < m_pxtn.Unit_Num(); ++unit_no) {
+      QString unit_name = shift_jis_codec->toUnicode(
+          m_pxtn.Unit_Get(unit_no)->get_name_buf_jis(nullptr));
+      unit_name.remove(forbidden_filename_character_matcher);
 
-  QSaveFile file(m_render_dialog->renderDestination());
-  if (!file.open(QIODevice::WriteOnly)) {
-    QMessageBox::warning(this, tr("Could not render"),
-                         tr("Could not open file for rendering"));
-    return;
-  }
+      QString unit = unit_name;
+      static const QString illegal = "\\/<>:\"|?*";
+      for (auto it : unit)
+        if (illegal.contains(it)) unit.replace(it, "_");
+      // mr clean magic eraser
 
+      QString filename = QString("%1/%2_%3.wav")
+                             .arg(dir.absoluteFilePath())
+                             .arg(unit_no)
+                             .arg(unit)
+                             .trimmed();  // smile
+
+      filenames_and_units.push_back({filename, unit_no});
+    }
+  }
   constexpr int GRANULARITY = 1000;
   QProgressDialog progress(tr("Rendering"), tr("Abort"), 0, GRANULARITY, this);
   progress.setWindowModality(Qt::WindowModal);
-  bool finished;
-  try {
-    finished = m_client->controller()->render_exn(
-        &file, length, fadeout, volume, [&](double p) {
-          progress.setValue(p * GRANULARITY);
-          return !progress.wasCanceled();
-        });
-  } catch (const QString &e) {
-    QMessageBox::warning(this, tr("Render error"), e);
-    finished = false;
+
+  uint num_tasks = filenames_and_units.size();
+  for (uint i = 0; i < num_tasks; ++i) {
+    const auto &[filename, solo_unit] = filenames_and_units[i];
+    QSaveFile file(filename);
+    if (!file.open(QIODevice::WriteOnly)) {
+      QMessageBox::warning(this, tr("Could not render"),
+                           tr("Could not open file for rendering"));
+      return;
+    }
+    progress.setLabelText(tr("Rendering") +
+                          QString(" (%1/%2)").arg(i + 1).arg(num_tasks));
+
+    bool finished;
+    try {
+      finished = m_client->controller()->render_exn(
+          &file, length, fadeout, volume, solo_unit, [&](double p) {
+            progress.setValue((p + i) * GRANULARITY / num_tasks);
+            return !progress.wasCanceled();
+          });
+    } catch (const QString &e) {
+      QMessageBox::warning(this, tr("Render error"), e);
+      finished = false;
+    }
+    if (!finished) return;
+    file.commit();
   }
   progress.close();
-  if (!finished) return;
-  file.commit();
   QMessageBox::information(this, tr("Rendering done"), tr("Rendering done"));
 }
 

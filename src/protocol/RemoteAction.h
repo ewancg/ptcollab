@@ -64,20 +64,21 @@ inline QDataStream &operator>>(QDataStream &in, UndoRedo &a) {
   return in;
 }
 struct AddUnit {
-  qint32 woice_id;
+  qint32 woice_no;
+  qint32 starting_volume;
   QString woice_name;
   QString unit_name;
 };
 inline QDataStream &operator<<(QDataStream &out, const AddUnit &a) {
-  out << a.woice_id << a.woice_name << a.unit_name;
+  out << a.woice_no << a.starting_volume << a.woice_name << a.unit_name;
   return out;
 }
 inline QDataStream &operator>>(QDataStream &in, AddUnit &a) {
-  in >> a.woice_id >> a.woice_name >> a.unit_name;
+  in >> a.woice_no >> a.starting_volume >> a.woice_name >> a.unit_name;
   return in;
 }
 inline QTextStream &operator<<(QTextStream &out, const AddUnit &a) {
-  out << "AddUnit(woice_id=" << a.woice_id << ", woice_name=" << a.woice_name
+  out << "AddUnit(woice_no=" << a.woice_no << ", woice_name=" << a.woice_name
       << ", unit_name=" << a.unit_name << ")";
   return out;
 }
@@ -280,7 +281,7 @@ inline QTextStream &operator<<(QTextStream &out, const SetLastMeas &a) {
   return out;
 }
 
-namespace Overdrive {
+namespace OverdriveEffect {
 struct Set {
   qint32 ovdrv_no;
   qreal cut;
@@ -324,7 +325,7 @@ inline QTextStream &operator<<(QTextStream &out, const Remove &a) {
 
 }  // namespace Overdrive
 
-namespace Delay {
+namespace DelayEffect {
 
 struct Set {
   qint32 delay_no;
@@ -347,7 +348,7 @@ inline QTextStream &operator<<(QTextStream &out, const Set &a) {
       << a.freq << ", " << a.rate << ", " << a.group << ")";
   return out;
 }
-}  // namespace Delay
+}
 
 namespace Woice {
 
@@ -461,12 +462,29 @@ inline QTextStream &operator<<(QTextStream &out, const WatchUser &a) {
   return out;
 }
 
+struct SetSongText {
+  enum { Title, Comment } field;
+  QString text;
+};
+inline QDataStream &operator<<(QDataStream &out, const SetSongText &a) {
+  out << a.field << a.text;
+  return out;
+}
+inline QDataStream &operator>>(QDataStream &in, SetSongText &a) {
+  in >> a.field >> a.text;
+  return in;
+}
+inline QTextStream &operator<<(QTextStream &out, const SetSongText &a) {
+  out << "WatchUser(" << a.field << ")";
+  return out;
+}
+
 using ClientAction =
     std::variant<EditAction, EditState, UndoRedo, AddUnit, RemoveUnit, MoveUnit,
                  AddWoice, RemoveWoice, ChangeWoice, TempoChange, BeatChange,
-                 SetRepeatMeas, SetLastMeas, SetUnitName, Overdrive::Add,
-                 Overdrive::Set, Overdrive::Remove, Delay::Set, Woice::Set,
-                 Ping, PlayState, WatchUser>;
+                 SetRepeatMeas, SetLastMeas, SetUnitName, OverdriveEffect::Add,
+                 OverdriveEffect::Set, OverdriveEffect::Remove, DelayEffect::Set, Woice::Set,
+                 Ping, PlayState, WatchUser, SetSongText>;
 inline bool clientActionShouldBeRecorded(const ClientAction &a) {
   bool ret;
   std::visit(overloaded{[&ret](const EditState &) { ret = false; },
